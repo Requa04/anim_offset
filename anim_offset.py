@@ -3,6 +3,16 @@ import random
 import numpy as np
 import mathutils
 
+bl_info = {
+    "name": "Anim Offset",
+    "author": "Requa",
+    "version": (1, 0),
+    "blender": (4, 0, 0),
+    "location": "View3D > Tool Shelf",
+    "description": "Allows for animation offesting using random values and distance to objects",
+    "category": "Animation",
+}
+
 def anim_offset(data_to_offset, offset_mode, seed, 
                offset_amount, reset_strip, only_pos_offset, 
                context, dist_origin, reset_cache_offset, 
@@ -25,12 +35,18 @@ def anim_offset(data_to_offset, offset_mode, seed,
     
     def check_anim_data(active_collection):
         for obj in active_collection.objects:
-            if obj.modifiers is not None or obj.animation_data is not None:
+            if obj.animation_data is not None:
+                return True
+    
+    def check_mod(active_collection):
+        for obj in active_collection.objects:
+            if obj.modifiers is not None:
                 return True
     
     has_animation_data = check_anim_data(active_collection)
+    has_modifier = check_mod(active_collection)
     
-    if has_animation_data != False:
+    if has_animation_data and has_modifier:
     
         def has_nla_strips_in_collection(active_collection):
             collection = active_collection 
@@ -43,7 +59,6 @@ def anim_offset(data_to_offset, offset_mode, seed,
         
         if dist_origin is not None:
             dist_origin = dist_origin.location * mathutils.Vector((x_dist_only, y_dist_only, z_dist_only))
-            print(dist_origin)
         
         match (data_to_offset, offset_mode, has_nla_strips_in_collection(active_collection), reset_strip, reset_cache_offset):
             case ("KEY0", "KEY0", _, _, _):
@@ -463,7 +478,6 @@ def anim_offset(data_to_offset, offset_mode, seed,
     else:
         pass
 
-
 class my_props(bpy.types.PropertyGroup):
     
     props = bpy.props
@@ -565,9 +579,8 @@ def register():
         bpy.types.Scene.my_props = bpy.props.PointerProperty(type = my_props)
 
 def unregister():
-    for i in classes:
-        bpy.utils.unregister_class(i)
-        del bpy.types.Scene.my_props
-        
-if __name__ == "__main__":
-    register()
+    del bpy.types.Scene.my_props
+    bpy.utils.unregister_class(my_props)
+    bpy.utils.unregister_class(anim_offset_op)
+    bpy.utils.unregister_class(Anim_Offset_Panel)
+
