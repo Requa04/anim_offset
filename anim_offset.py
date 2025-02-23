@@ -16,42 +16,30 @@ bl_info = {
 def anim_offset(data_to_offset, offset_mode, seed, 
                offset_amount, reset_strip, only_pos_offset, 
                context, dist_origin, reset_cache_offset, 
-               curve_path, x_dist_only, y_dist_only, z_dist_only)-> None:
+               curve_path, x_dist_only, y_dist_only, z_dist_only):
      
     active_collection = context.view_layer.active_layer_collection.collection
 
-    def remove_empty_nla_track_if_found(active_collection)-> None:
-        
+    def remove_empty_nla_track_if_found(active_collection):
         collection = active_collection
-        
         for obj in collection.objects:
-                
                 animation_data = obj.animation_data
-                nla_tracks = animation_data.nla_tracks
-                
-                if animation_data is None or nla_tracks is None:
-                    continue
-                
-                for track in nla_tracks:
-                    
-                    if track.strips:
-                        continue
-                    
-                    animation_data.nla_tracks.remove(track)
+                if animation_data is not None:
+                    nla_tracks = animation_data.nla_tracks
+                    if animation_data and nla_tracks:
+                        for track in nla_tracks:
+                            if not track.strips:
+                                animation_data.nla_tracks.remove(track)
     
     remove_empty_nla_track_if_found(active_collection) 
     
-    def check_anim_data(active_collection)-> bool:
-        
+    def check_anim_data(active_collection):
         for obj in active_collection.objects:
-            
-            if obj.animation_data is not None:   
+            if obj.animation_data is not None:
                 return True
     
-    def check_mod(active_collection)-> bool:
-        
+    def check_mod(active_collection):
         for obj in active_collection.objects:
-            
             if obj.modifiers is not None:
                 return True
     
@@ -60,82 +48,57 @@ def anim_offset(data_to_offset, offset_mode, seed,
     
     if has_animation_data and has_modifier:
     
-        def has_nla_strips_in_collection(active_collection)-> bool:
-            
+        def has_nla_strips_in_collection(active_collection):
             collection = active_collection 
-            
             for obj in collection.objects:
-                
-                if obj.animation_data is None or obj.animation_data.nla_tracks is None:
-                    continue 
-                
-                for track in obj.animation_data.nla_tracks:
-                        
-                    if track.strips:
-                                
-                        return True
-                        
+                if obj.animation_data and obj.animation_data.nla_tracks:
+                    for track in obj.animation_data.nla_tracks:
+                        if track.strips:
+                            return True  
             return False
         
         if dist_origin is not None:
-            
             dist_origin = dist_origin.location * mathutils.Vector((x_dist_only, y_dist_only, z_dist_only))
         
         match (data_to_offset, offset_mode, has_nla_strips_in_collection(active_collection), reset_strip, reset_cache_offset):
-            
             case ("KEY0", "KEY0", _, _, _):
-                
                 for i, obj in enumerate(active_collection.objects, start=0):
-                    
                     action = obj.animation_data.action
                     random.seed(a=i+seed, version=2)
-                    
                     frame_offset = random.random()
                     frame_offset = np.interp(frame_offset, [0, 1], [-offset_amount, offset_amount])
                     frame_offset = frame_offset if not only_pos_offset else abs(frame_offset)
 
-                    if not action:
-                        return
-
-                    for fcurve in action.fcurves:
-                        
-                        for keyframe in fcurve.keyframe_points:
-                            
-                            keyframe.co.x += frame_offset
-                            keyframe.handle_left = (keyframe.handle_left[0] + frame_offset, keyframe.handle_left[1])
-                            keyframe.handle_right = (keyframe.handle_right[0] + frame_offset, keyframe.handle_right[1])
+                    if action:  
+                        for fcurve in action.fcurves:    
+                            for keyframe in fcurve.keyframe_points:
+                                keyframe.co.x += frame_offset
+                                left_handle = keyframe.handle_left
+                                right_handle = keyframe.handle_right
+                                keyframe.handle_left = (left_handle[0] + frame_offset, left_handle[1])
+                                keyframe.handle_right = (right_handle[0] + frame_offset, right_handle[1])
 
             case ("KEY1", "KEY0", False, _, _):
-                
                 for i, obj in enumerate(active_collection.objects, start=0):
-                   
                     action = obj.animation_data.action
                     random.seed(a=i+seed, version=2)
-                    
                     frame_offset = random.random()
                     frame_offset = np.interp(frame_offset, [0, 1], [-offset_amount, offset_amount])
                     frame_offset = frame_offset if not only_pos_offset else abs(frame_offset)
 
-                    if not action:
-                        return
-                    
-                    track = obj.animation_data.nla_tracks.new()
-                    track.strips.new(action.name, int(action.frame_range[0]), action)
-                    
-                    obj.animation_data.action = None
-                    
-                    nla_track = obj.animation_data.nla_tracks[-1]
-                    nla_strip = nla_track.strips[-1]
-                    nla_strip.frame_start += frame_offset
-                    nla_strip.frame_end += frame_offset
+                    if action:
+                        track = obj.animation_data.nla_tracks.new()
+                        track.strips.new(action.name, int(action.frame_range[0]), action)
+                        obj.animation_data.action = None
+                        nla_track = obj.animation_data.nla_tracks[-1]
+                        nla_strip = nla_track.strips[-1]
+                        nla_strip.frame_start += frame_offset
+                        nla_strip.frame_end += frame_offset
             
             case ("KEY1", "KEY1", False, _, _):
-                
                 objects_pos = []
                 origin = []
-                
                 for obj in active_collection.objects: 
-                    
                     objects_pos.append(obj.location)
                     origin.append(dist_origin)
 
@@ -143,119 +106,74 @@ def anim_offset(data_to_offset, offset_mode, seed,
                 frame_offset = np.interp(vector_lengths, [np.min(vector_lengths), np.max(vector_lengths)], [0, offset_amount])
 
                 for i, obj in enumerate(active_collection.objects, start=0): 
-                    
                     action = obj.animation_data.action
-                    
-                    if not action:
-                        return  
-                   
-                    track = obj.animation_data.nla_tracks.new()
-                    track.strips.new(action.name, int(action.frame_range[0]), action)
-                        
-                    obj.animation_data.action = None
-                        
-                    nla_track = obj.animation_data.nla_tracks[-1]
-                    nla_strip = nla_track.strips[-1] 
-                    nla_strip.frame_start += frame_offset[i]
-                    nla_strip.frame_end += frame_offset[i]
+                    if action:  
+                        track = obj.animation_data.nla_tracks.new()
+                        track.strips.new(action.name, int(action.frame_range[0]), action)
+                        obj.animation_data.action = None
+                        nla_track = obj.animation_data.nla_tracks[-1]
+                        nla_strip = nla_track.strips[-1] 
+                        nla_strip.frame_start += frame_offset[i]
+                        nla_strip.frame_end += frame_offset[i]
 
             case ("KEY1", _, True, True, _):
-                
                 for obj in active_collection.objects:
-                    
-                    if obj.animation_data is None or obj.animation_data.nla_tracks is None:
-                        return
-                    
-                    for track in obj.animation_data.nla_tracks:
-                            
-                        if not track.strips:
-                            return
-                            
-                        min_start_frame = min(strip.frame_start for strip in track.strips)
-                        offset = -min_start_frame
-                                
-                        for strip in track.strips:
-                                    
-                            strip.frame_start += offset
-                            strip.frame_end += offset
+                    if obj.animation_data and obj.animation_data.nla_tracks:
+                        for track in obj.animation_data.nla_tracks:
+                            if track.strips:
+                                min_start_frame = min(strip.frame_start for strip in track.strips)
+                                offset = -min_start_frame
+                                for strip in track.strips:
+                                    strip.frame_start += offset
+                                    strip.frame_end += offset
 
             case ("KEY1", "KEY0", True, False, _):
-                
                 for i, obj in enumerate(active_collection.objects, start=0):
-                    
                     random.seed(i+seed)
                     offset = random.random()
-                    
-                    if obj.animation_data is None or obj.animation_data.nla_tracks is None:
-                        return
-                    
-                    for track in obj.animation_data.nla_tracks:
-                            
-                        if not track.strips:
-                            return
-                           
-                        for strip in track.strips:
-                                
-                            offset = np.interp(offset, [0, 1], [-offset_amount, offset_amount])
-                            offset = offset if not only_pos_offset else abs(offset)
-                                
-                            strip.frame_start += offset
-                            strip.frame_end += offset
+                    if obj.animation_data and obj.animation_data.nla_tracks:
+                        for track in obj.animation_data.nla_tracks:
+                            if track.strips:
+                                for strip in track.strips:
+                                    offset = np.interp(offset, [0, 1], [-offset_amount, offset_amount])
+                                    offset = offset if not only_pos_offset else abs(offset)
+                                    strip.frame_start += offset
+                                    strip.frame_end += offset
 
             case ("KEY1", "KEY1", True, False, _):
-                
                 objects_pos = []
                 origin = []
-                
                 for obj in active_collection.objects: 
-                    
                     objects_pos.append(obj.location)
                     origin.append(dist_origin)
 
-                if origin is None:
-                    return
+                if origin is not None:
                     
-                vector_lengths = np.linalg.norm(np.array(objects_pos)-np.array(origin), axis=1)
-                frame_offset = np.interp(vector_lengths, [np.min(vector_lengths), np.max(vector_lengths)], [0, offset_amount])
+                    vector_lengths = np.linalg.norm(np.array(objects_pos)-np.array(origin), axis=1)
+                    frame_offset = np.interp(vector_lengths, [np.min(vector_lengths), np.max(vector_lengths)], [0, offset_amount])
                         
                 for i, obj in enumerate(active_collection.objects, start=0):    
-                    
-                    if obj.animation_data is None or obj.animation_data.nla_tracks is None:
-                        return
-                    
-                    for track in obj.animation_data.nla_tracks:
-                        
-                        if not track.strips:
-                            return
-                        
-                        for strip in track.strips:
-                            
-                            strip.frame_start += frame_offset[i]
-                            strip.frame_end += frame_offset[i]
+                    if obj.animation_data and obj.animation_data.nla_tracks:
+                        for track in obj.animation_data.nla_tracks:
+                            if track.strips:
+                                for strip in track.strips:
+                                    strip.frame_start += frame_offset[i]
+                                    strip.frame_end += frame_offset[i]
 
             case ("KEY2", "KEY0", _, _, False):
-                
                 for i, obj in enumerate(active_collection.objects, start=0):
-                    
                     random.seed(a=i+seed, version=2)
-                    
                     offset = random.random()
                     offset = round(np.interp(offset, [0, 1], [-offset_amount, offset_amount]))
 
                     for mod in obj.modifiers:
-                        
-                        if mod.type != "MESH_SEQUENCE_CACHE" or mod.cache_file is None:
-                            return
-                        
-                        mod.cache_file.frame_offset = offset
+                        if mod.type == "MESH_SEQUENCE_CACHE" and mod.cache_file:
+                            mod.cache_file.frame_offset = offset
 
             case ("KEY2", "KEY1", _, _, False):
-                
                 objects_pos = []
                 origin = []
-                
                 for obj in active_collection.objects: 
-                    
                     objects_pos.append(obj.location)
                     origin.append(dist_origin)
 
@@ -263,33 +181,22 @@ def anim_offset(data_to_offset, offset_mode, seed,
                 frame_offset = np.interp(vector_lengths, [np.min(vector_lengths), np.max(vector_lengths)], [0, offset_amount])
 
                 for i, obj in enumerate(active_collection.objects, start=0):
-                    
                     for mod in obj.modifiers:
-                        
-                        if mod.type != "MESH_SEQUENCE_CACHE" or mod.cache_file is None:
-                            return
-                        
-                        mod.cache_file.frame_offset = frame_offset[i]
+                        if mod.type == "MESH_SEQUENCE_CACHE" and mod.cache_file:
+                            mod.cache_file.frame_offset = frame_offset[i]
 
             case ("KEY2", _, _, _, True):
-                
                 for obj in active_collection.objects:
-                    
                     for mod in obj.modifiers:
-                        
-                        if mod.type != "MESH_SEQUENCE_CACHE" or mod.cache_file is None:
-                            return
-                        
-                        mod.cache_file.frame_offset = 0
+                        if mod.type == "MESH_SEQUENCE_CACHE" and mod.cache_file:
+                            mod.cache_file.frame_offset = 0
 
             case("KEY0", "KEY2", _, _, _):           
                 
                 def sample_nearest_curve_point(curve_object, sample_object):
         
                     if curve_object.type != "CURVE":
-                        
                         print("Selected object is not a curve.")
-                        
                         return None
                         
                     curve_data = curve_object.data
@@ -302,46 +209,28 @@ def anim_offset(data_to_offset, offset_mode, seed,
                     min_distance = float("inf")
                         
                     match spline_type:
-                        
                         case "BEZIER":  
-                             
                              spline_points = spline.bezier_points
                              spline_iterable = enumerate(spline_points, start=0)
-                             
                              for i, point in spline_iterable:
-                                
                                 distance = (target_location - point.co).length
-                                
                                 if distance < min_distance:
-                                    
                                     min_distance = distance
                                     point_factor = float(i)/len(spline_points)
-                        
                         case "POLY":  
-                            
                             spline_points = spline.points
                             spline_iterable = enumerate(spline_points, start=0)
-                            
                             for i, point in spline_iterable:
-                                
                                 distance = (target_location - point.co.xyz).length
-                                
                                 if distance < min_distance:
-                                    
                                     min_distance = distance
                                     point_factor = float(i)/len(spline_points)
-                        
                         case "NURBS":  
-                            
                             spline_points = spline.points
                             spline_iterable = enumerate(spline_points, start=0)
-                            
                             for i, point in spline_iterable:
-                                
                                 distance = (target_location - point.co.xyz).length
-                                
                                 if distance < min_distance:
-                                    
                                     min_distance = distance
                                     point_factor = float(i)/len(spline_points)
                         case _:
@@ -353,12 +242,9 @@ def anim_offset(data_to_offset, offset_mode, seed,
                 objects = active_collection.objects
                 
                 for obj in objects:
-                    
                     if curve_path is not None:
-                        
                         point_factor = sample_nearest_curve_point(curve_path, obj)[0]
                         offset_value.append(point_factor)
-                    
                     else:
                         raise Exception("No curve object selected")
                 
@@ -366,22 +252,21 @@ def anim_offset(data_to_offset, offset_mode, seed,
                 np_offset_value = np.interp(np_offset_value, [np.min(np_offset_value), np.max(np_offset_value)], [0, offset_amount])
 
                 for i, obj in enumerate(objects, start=0):
-                    
                     action = obj.animation_data.action
 
-                    if not action:  
-                        return
-                    
-                    for fcurve in action.fcurves:    
-                        
-                        for keyframe in fcurve.keyframe_points:
+                    if action:  
+                        for fcurve in action.fcurves:    
+                            for keyframe in fcurve.keyframe_points:
                                 
-                            keyframe.co.x += frame_offset[i]
-                            keyframe.handle_left = (keyframe.handle_left[0] + frame_offset[i], keyframe.handle_left[1])
-                            keyframe.handle_right = (keyframe.handle_right[0] + frame_offset[i], keyframe.handle_right[1])
+                                keyframe.co.x += np_offset_value[i]
+                                
+                                left_handle = keyframe.handle_left
+                                right_handle = keyframe.handle_right
+                                
+                                keyframe.handle_left = (left_handle[0] + np_offset_value[i], left_handle[1])
+                                keyframe.handle_right = (right_handle[0] + np_offset_value[i], right_handle[1])
                                                  
             case("KEY1", "KEY2", False, False, _):           
-                
                 def sample_nearest_curve_point(curve_object, sample_object):
 
                     if curve_object.type != "CURVE":
@@ -398,45 +283,28 @@ def anim_offset(data_to_offset, offset_mode, seed,
                     min_distance = float("inf")
                         
                     match spline_type:
-                        
                         case "BEZIER":  
                              spline_points = spline.bezier_points
                              spline_iterable = enumerate(spline_points, start=0)
-                             
                              for i, point in spline_iterable:
-                                
                                 distance = (target_location - point.co).length
-                                
                                 if distance < min_distance:
-                                    
                                     min_distance = distance
                                     point_factor = float(i)/len(spline_points)
-                        
                         case "POLY":  
-                            
                             spline_points = spline.points
                             spline_iterable = enumerate(spline_points, start=0)
-                            
                             for i, point in spline_iterable:
-                                
                                 distance = (target_location - point.co.xyz).length
-                                
                                 if distance < min_distance:
-                                    
                                     min_distance = distance
                                     point_factor = float(i)/len(spline_points)
-                        
                         case "NURBS":  
-                            
                             spline_points = spline.points
                             spline_iterable = enumerate(spline_points, start=0)
-                            
                             for i, point in spline_iterable:
-                                
                                 distance = (target_location - point.co.xyz).length
-                                
                                 if distance < min_distance:
-                                    
                                     min_distance = distance
                                     point_factor = float(i)/len(spline_points)
                         case _:
@@ -448,50 +316,36 @@ def anim_offset(data_to_offset, offset_mode, seed,
                 objects = active_collection.objects
                 
                 for obj in objects:
-                    
                     if curve_path is not None:
-                        
                         point_factor = sample_nearest_curve_point(curve_path, obj)[0]
                         offset_value.append(point_factor)
-                    
                     else:
-                        
                         raise Exception("No curve object selected")
                 
                 np_offset_value = np.array(offset_value)
                 np_offset_value = np.interp(np_offset_value, [np.min(np_offset_value), np.max(np_offset_value)], [0, offset_amount])
 
                 for i, obj in enumerate(objects, start=0):
-                    
                     action = obj.animation_data.action
-                    
                     random.seed(a=i+seed, version=2)
-                    
                     frame_offset = random.random()
                     frame_offset = np.interp(frame_offset, [0, 1], [-offset_amount, offset_amount])
                     frame_offset = frame_offset if not only_pos_offset else abs(frame_offset)
 
-                    if not action:
-                        return
-                    
-                    track = obj.animation_data.nla_tracks.new()
-                    track.strips.new(action.name, int(action.frame_range[0]), action)
-                    
-                    obj.animation_data.action = None
-                    
-                    nla_track = obj.animation_data.nla_tracks[-1]
-                    nla_strip = nla_track.strips[-1]
-                    nla_strip.frame_start += np_offset_value[i]
-                    nla_strip.frame_end += np_offset_value[i]
+                    if action:
+                        track = obj.animation_data.nla_tracks.new()
+                        track.strips.new(action.name, int(action.frame_range[0]), action)
+                        obj.animation_data.action = None
+                        nla_track = obj.animation_data.nla_tracks[-1]
+                        nla_strip = nla_track.strips[-1]
+                        nla_strip.frame_start += np_offset_value[i]
+                        nla_strip.frame_end += np_offset_value[i]
                                    
             case("KEY1", "KEY2", True, False, _):           
                 
                 def sample_nearest_curve_point(curve_object, sample_object):
-                    
                     if curve_object.type != "CURVE":
-                        
                         print("Selected object is not a curve.")
-                        
                         return None
                         
                     curve_data = curve_object.data
@@ -504,46 +358,28 @@ def anim_offset(data_to_offset, offset_mode, seed,
                     min_distance = float("inf")
                         
                     match spline_type:
-                        
                         case "BEZIER":  
-                             
                              spline_points = spline.bezier_points
                              spline_iterable = enumerate(spline_points, start=0)
-                             
                              for i, point in spline_iterable:
-                                
                                 distance = (target_location - point.co).length
-                                
                                 if distance < min_distance:
-                                    
                                     min_distance = distance
                                     point_factor = float(i)/len(spline_points)
-                        
                         case "POLY":  
-                            
                             spline_points = spline.points
                             spline_iterable = enumerate(spline_points, start=0)
-                            
                             for i, point in spline_iterable:
-                                
                                 distance = (target_location - point.co.xyz).length
-                                
                                 if distance < min_distance:
-                                    
                                     min_distance = distance
                                     point_factor = float(i)/len(spline_points)
-                        
                         case "NURBS":  
-                            
                             spline_points = spline.points
                             spline_iterable = enumerate(spline_points, start=0)
-                            
                             for i, point in spline_iterable:
-                                
                                 distance = (target_location - point.co.xyz).length
-                                
                                 if distance < min_distance:
-                                    
                                     min_distance = distance
                                     point_factor = float(i)/len(spline_points)
                         case _:
@@ -555,42 +391,28 @@ def anim_offset(data_to_offset, offset_mode, seed,
                 objects = active_collection.objects
                 
                 for obj in objects:
-                    
                     if curve_path is not None:
-                        
                         point_factor = sample_nearest_curve_point(curve_path, obj)[0]
                         offset_value.append(point_factor)
-                    
                     else:
-                        
                         raise Exception("No curve object selected")
                 
                 np_offset_value = np.array(offset_value)
                 np_offset_value = np.interp(np_offset_value, [np.min(np_offset_value), np.max(np_offset_value)], [0, offset_amount])
 
                 for i, obj in enumerate(active_collection.objects, start=0):    
-                    
-                    if obj.animation_data is None or obj.animation_data.nla_tracks is None:
-                        return
-                    
-                    for track in obj.animation_data.nla_tracks:
-                        
-                        if not track.strips:
-                            return
-                        
-                        for strip in track.strips:
-                        
-                                strip.frame_start += np_offset_value[i]
-                                strip.frame_end += np_offset_value[i]
+                    if obj.animation_data and obj.animation_data.nla_tracks:
+                        for track in obj.animation_data.nla_tracks:
+                            if track.strips:
+                                for strip in track.strips:
+                                    strip.frame_start += np_offset_value[i]
+                                    strip.frame_end += np_offset_value[i]
                                                                     
             case("KEY2", "KEY2", _, _, False):           
                 
                 def sample_nearest_curve_point(curve_object, sample_object):
-                    
                     if curve_object.type != "CURVE":
-                        
                         print("Selected object is not a curve.")
-                        
                         return None
                         
                     curve_data = curve_object.data
@@ -603,50 +425,31 @@ def anim_offset(data_to_offset, offset_mode, seed,
                     min_distance = float("inf")
                         
                     match spline_type:
-                        
                         case "BEZIER":  
-                             
                              spline_points = spline.bezier_points
                              spline_iterable = enumerate(spline_points, start=0)
-                             
                              for i, point in spline_iterable:
-                                
                                 distance = (target_location - point.co).length
-                                
                                 if distance < min_distance:
-                                    
                                     min_distance = distance
                                     point_factor = float(i)/len(spline_points)
-                        
                         case "POLY":  
-                            
                             spline_points = spline.points
                             spline_iterable = enumerate(spline_points, start=0)
-                            
                             for i, point in spline_iterable:
-                                
                                 distance = (target_location - point.co.xyz).length
-                                
                                 if distance < min_distance:
-                                    
                                     min_distance = distance
                                     point_factor = float(i)/len(spline_points)
-                        
                         case "NURBS":  
-                            
                             spline_points = spline.points
                             spline_iterable = enumerate(spline_points, start=0)
-                            
                             for i, point in spline_iterable:
-                                
                                 distance = (target_location - point.co.xyz).length
-                                
                                 if distance < min_distance:
-                                    
                                     min_distance = distance
                                     point_factor = float(i)/len(spline_points)
                         case _:
-                            
                             print("Select Spline type object")
                         
                     return point_factor, min_distance    
@@ -655,55 +458,38 @@ def anim_offset(data_to_offset, offset_mode, seed,
                 objects = active_collection.objects
                 
                 for obj in objects:
-                    
                     if curve_path is not None:
-                        
                         point_factor = sample_nearest_curve_point(curve_path, obj)[0]
                         offset_value.append(point_factor)
-                    
                     else:
-                        
                         raise Exception("No curve object selected")
                 
                 np_offset_value = np.array(offset_value)
                 np_offset_value = np.interp(np_offset_value, [np.min(np_offset_value), np.max(np_offset_value)], [0, offset_amount])
 
                 for i, obj in enumerate(active_collection.objects, start=0):
-                    
                     for mod in obj.modifiers:
-                        
-                        if mod.type != "MESH_SEQUENCE_CACHE" or mod.cache_file is None:
-                            return
-                        
-                        mod.cache_file.frame_offset = np_offset_value[i]
+                        if mod.type == "MESH_SEQUENCE_CACHE" and mod.cache_file:
+                            mod.cache_file.frame_offset = np_offset_value[i]
                             
             case("KEY0", "KEY1", _, _, _):
-                
                 objects_pos = []
                 origin = []
-                
                 for obj in active_collection.objects: 
-                    
                     objects_pos.append(obj.location)
                     origin.append(dist_origin)
-                
                 vector_lengths = np.linalg.norm(np.array(objects_pos)-np.array(origin), axis=1)
                 frame_offset = np.interp(vector_lengths, [np.min(vector_lengths), np.max(vector_lengths)], [0, offset_amount])
-                
                 for i, obj in enumerate(active_collection.objects, start=0):
-                    
                     action = obj.animation_data.action
-                    
-                    if not action:
-                        return  
-                    
-                    for fcurve in action.fcurves:    
-                        
-                        for keyframe in fcurve.keyframe_points:
-                            
-                            keyframe.co.x += frame_offset[i]
-                            keyframe.handle_left = (keyframe.handle_left[0] + frame_offset[i], keyframe.handle_left[1])
-                            keyframe.handle_right = (keyframe.handle_right[0] + frame_offset[i], keyframe.handle_right[1])  
+                    if action:  
+                        for fcurve in action.fcurves:    
+                            for keyframe in fcurve.keyframe_points:
+                                keyframe.co.x += frame_offset[i]
+                                left_handle = keyframe.handle_left
+                                right_handle = keyframe.handle_right
+                                keyframe.handle_left = (left_handle[0] + frame_offset[i], left_handle[1])
+                                keyframe.handle_right = (right_handle[0] + frame_offset[i], right_handle[1])  
                                   
 class my_props(bpy.types.PropertyGroup):
     
@@ -775,17 +561,14 @@ class Anim_Offset_Panel(bpy.types.Panel):
         row = layout.row()
         
         if props.offset_mode != "KEY0":
-            
             row.prop(props, "x_dist_only")
             row.prop(props, "y_dist_only")
             row.prop(props, "z_dist_only")
         
         if props.offset_mode == "KEY1":
-            
             layout.prop(props, "dist_origin")
     
         if props.offset_mode == "KEY2":    
-            
             layout.prop(props, "curve_path")
 
         layout.prop(props, "seed")
@@ -794,11 +577,9 @@ class Anim_Offset_Panel(bpy.types.Panel):
         layout.prop(props, "data_to_offset")
         
         if props.data_to_offset == "KEY1":
-            
             layout.prop(props, "reset_strip")
         
         if props.data_to_offset == "KEY2":
-            
             layout.prop(props, "reset_cache_offset")
         
         operator = layout.operator("anim.anim_offset", text="Run")
@@ -806,16 +587,12 @@ class Anim_Offset_Panel(bpy.types.Panel):
 classes = [my_props, anim_offset_op, Anim_Offset_Panel] 
 
 def register():
-    
     for i in classes:
-        
         bpy.utils.register_class(i)
         bpy.types.Scene.my_props = bpy.props.PointerProperty(type = my_props)
 
 def unregister():
-    
     del bpy.types.Scene.my_props
-    
     bpy.utils.unregister_class(my_props)
     bpy.utils.unregister_class(anim_offset_op)
     bpy.utils.unregister_class(Anim_Offset_Panel)
